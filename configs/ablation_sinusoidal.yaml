@@ -1,0 +1,52 @@
+# Ablation: identical to base but sinusoidal positions, shorter budget; compare to base at equal steps.
+seed: 42
+work_dir: work                  # data + tokenizer artifacts
+out_dir: checkpoints/ablation_sinusoidal       # checkpoints (point at Google Drive on Colab)
+
+data:
+  max_pairs: null               # null = use all filtered opus-100 train pairs
+  min_char_ratio: 0.4           # len(en)/len(fr) bounds
+  max_char_ratio: 2.5
+  max_chars: 1000
+  max_tokens: 256               # drop pairs longer than this (subwords, either side)
+
+tokenizer:
+  vocab_size: 16000
+  model_type: unigram
+  sample_sentences: 2000000     # sentences (fr+en) fed to SentencePiece training
+  src_sampling_alpha: 0.1       # subword regularization on source (train only); 0 = off
+
+model:
+  d_model: 512
+  n_heads: 8
+  d_ff: 2048
+  enc_layers: 6
+  dec_layers: 6
+  dropout: 0.1
+  pos: sinusoidal                    # rope | sinusoidal
+  max_len: 512
+
+train:
+  batch_tokens: 8192            # padded tokens per micro-batch
+  accum_steps: 3                # ~24k tokens per update
+  lr: 0.0007
+  warmup_steps: 4000
+  label_smoothing: 0.1
+  clip_norm: 1.0
+  max_steps: 60000
+  max_hours: 1.5                # wall-clock budget across resumes
+  eval_every: 2000
+  ckpt_every: 1000
+  keep_ckpts: 5                 # periodic checkpoints kept for averaging
+  num_workers: 2
+
+decode:
+  beam: 5
+  len_penalty: 1.0
+  max_len_a: 1.5
+  max_len_b: 10
+  split_over_tokens: 128
+
+wandb:
+  project: fr-en-transformer
+  enabled: true

@@ -1,0 +1,14 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+wandb/
+artifacts/
+checkpoints/
+*.pt
+*.safetensors
+work/
+work_smoke/
+Transformer_model.pdf
+PLAN.md

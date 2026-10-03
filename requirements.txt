@@ -1,0 +1,8 @@
+torch>=2.2
+datasets>=2.18
+sentencepiece>=0.2
+wandb
+huggingface_hub
+safetensors
+pyyaml
+numpy
