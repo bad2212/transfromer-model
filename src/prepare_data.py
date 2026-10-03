@@ -69,7 +69,7 @@ def train_spm(cfg, work):
         normalization_rule_name="identity",  # we normalise ourselves (src/utils.normalize)
         pad_id=0, unk_id=1, bos_id=2, eos_id=3,
         seed_sentencepiece_size=1000000,
-        num_threads=os.cpu_count(),
+        num_threads=2,  # fixed: unigram EM results depend on the thread count (matches the Colab run)
     )
 
 
