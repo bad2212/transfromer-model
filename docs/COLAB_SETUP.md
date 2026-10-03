@@ -1,7 +1,6 @@
 # Training on Google Colab: setup guide
 
-This guide trains the main model on a free Colab T4 GPU (16 GB). The run takes about 5.5 hours of
-GPU time. Checkpoints are saved to Google Drive, so a Colab disconnect costs only a few minutes.
+This guide trains the main model on a free Colab T4 GPU (16 GB). The run takes about 5.5 hours of GPU time. Checkpoints are saved to Google Drive, so a Colab disconnect costs only a few minutes.
 
 **Before you start**
 - The GitHub repo `bad2212/transfromer-model` is **public**. Colab clones it without logging in.
