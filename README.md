@@ -23,7 +23,7 @@ Steps: sanity tests → data prep + tokenizer (`src/prepare_data.py`) → traini
 resumable: re-run the same command after an interruption) → checkpoint averaging + beam/length-penalty
 sweep on dev + test predictions (`src/predict.py`) → `score.py` on dev → `test_predictions.json`.
 
-On Colab (T4), use `notebooks/colab_train.ipynb`; checkpoints go to Google Drive so a disconnect only
+On Colab (T4), follow [docs/COLAB_SETUP.md](docs/COLAB_SETUP.md) (`notebooks/colab_train.ipynb`); checkpoints go to Google Drive so a disconnect only
 costs a re-run of the training cell.
 
 Local smoke test (CPU/Apple-GPU, ~10 min, not for results): `bash scripts/reproduce.sh configs/smoke.yaml`
