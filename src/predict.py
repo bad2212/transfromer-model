@@ -1,6 +1,6 @@
 """Average checkpoints, tune decoding on dev, write dev/test predictions.
 
-    python -m src.predict --config configs/base.yaml --avg 5 --sweep
+    python -m src.predict --config configs/base_6x3.yaml --avg 3 --sweep
     python -m src.predict --ckpt checkpoints/base/best.pt --beam 5 --alpha 1.0
 
 Selection uses dev only (PLAN.md D4). Writes into <out_dir>/eval/:
@@ -42,7 +42,7 @@ def main():
     ap.add_argument("--config", default="configs/base.yaml")
     ap.add_argument("--out_dir")
     ap.add_argument("--ckpt", nargs="*", help="explicit checkpoint file(s); default: last --avg step ckpts")
-    ap.add_argument("--avg", type=int, default=5)
+    ap.add_argument("--avg", type=int, default=3)
     ap.add_argument("--beam", type=int)
     ap.add_argument("--alpha", type=float)
     ap.add_argument("--sweep", action="store_true", help="grid over beam x length penalty on dev")
@@ -69,8 +69,8 @@ def main():
     beam, alpha = args.beam or dc["beam"], args.alpha if args.alpha is not None else dc["len_penalty"]
     if args.sweep:
         results = []
-        for b in [1, 4, 5, 8]:
-            for a in ([0.0] if b == 1 else [0.6, 1.0, 1.4]):
+        for b in [1, 4, 5]:                 # beam 8 dropped: no gain from 4->5, and slow without a KV cache
+            for a in ([0.0] if b == 1 else [0.6, 1.0, 1.4, 1.8, 2.2]):
                 t0 = time.time()
                 rep = score_predictions(run(make(b, a), dev_in), dev_gold)
                 results.append({"beam": b, "alpha": a, "overall": rep["OVERALL"], "bleu": rep["all"]["bleu"],

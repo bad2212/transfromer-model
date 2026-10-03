@@ -6,17 +6,34 @@ unseen-domain (`opus_books`, never trained on) slices.
 
 | | Link |
 |---|---|
-| Model (Hugging Face) | _TBD_ |
-| Training run (W&B) | _TBD_ |
-| Report | `report/report.pdf` (_TBD_) |
+| Model (Hugging Face) | https://huggingface.co/Badalt/fr-en-transformer-scratch |
+| Training run (W&B) | https://wandb.ai/badalthakur2212-iisc/fr-en-transformer/runs/5ks4crpz |
+| W&B report | [training and generalization](https://wandb.ai/badalthakur2212-iisc/fr-en-transformer/reports/FR%E2%86%92EN-Transformer-from-scratch:-training-and-generalization--VmlldzoxODA1MDg0Mw==) |
+| Report | [`report/report.pdf`](report/report.pdf) (built by `python report/build_report.py`) |
+| Submission | [`test_predictions.json`](test_predictions.json) |
+
+## Results (provided dev set, official `score.py`)
+
+6 encoder / 3 decoder layers, 39.7M parameters, 3.6 h on one T4 (9,000 updates, ~8.3 epochs; stopped by the
+free-Colab GPU quota), average of checkpoints 7k-9k, beam 5, length penalty 1.8.
+
+| Slice | n | BLEU | chrF |
+|---|---|---|---|
+| seen | 60 | 29.78 | 46.37 |
+| long | 30 | 34.66 | 59.98 |
+| unseen_domain | 60 | 21.89 | 43.41 |
+| **all** | 150 | **30.23** | **47.91** |
+
+**OVERALL = 39.94** (0.4·BLEU + 0.4·chrF + 0.2·chrF on unseen_domain). Length is not the failure mode at these
+lengths; domain is (see the report).
 
 ## Reproduce (one command, seeded)
 
 ```bash
-python -m venv .venv && source .venv/bin/activate
+python3.11 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 export WANDB_API_KEY=...            # or set wandb.enabled: false in the config
-bash scripts/reproduce.sh configs/base.yaml
+bash scripts/reproduce.sh configs/base_6x3.yaml   # the submitted model
 ```
 
 Steps: sanity tests → data prep + tokenizer (`src/prepare_data.py`) → training (`src/train.py`,
@@ -32,7 +49,7 @@ Local smoke test (CPU/Apple-GPU, ~10 min, not for results): `bash scripts/reprod
 
 | Path | What |
 |---|---|
-| `configs/` | `base.yaml` (main run), `base_6x3.yaml` (fallback), `ablation_sinusoidal.yaml`, `smoke.yaml` |
+| `configs/` | `base_6x3.yaml` (submitted model), `base.yaml` (6/6, benchmarked), `ablation_sinusoidal.yaml`, `smoke.yaml` |
 | `src/prepare_data.py` | load opus-100, normalise, filter, dedupe, drop dev/test overlap, train SentencePiece |
 | `src/model.py` | the Transformer (written from scratch on `torch.nn` primitives + `scaled_dot_product_attention`) |
 | `src/train.py` | token-bucketed batches, source-side subword sampling, AMP, warmup + inverse-sqrt LR, W&B, resumable checkpoints |
