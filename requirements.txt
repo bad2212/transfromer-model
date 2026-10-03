@@ -7,3 +7,4 @@ safetensors
 pyyaml
 numpy
 matplotlib
+wandb-workspaces
