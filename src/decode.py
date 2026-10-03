@@ -126,21 +126,32 @@ def split_long(text):
 
 class Translator:
     def __init__(self, model, sp, device, beam=5, len_penalty=1.0, max_len_a=1.5,
-                 max_len_b=10, split_over_tokens=128, batch_size=64):
+                 max_len_b=10, split_over_tokens=128, batch_size=64, batch_tokens=2048):
         self.model, self.sp, self.device = model.eval(), sp, device
         self.beam, self.alpha = beam, len_penalty
         self.a, self.b = max_len_a, max_len_b
         self.split_over = split_over_tokens
-        self.batch_size = batch_size
+        self.batch_size, self.batch_tokens = batch_size, batch_tokens
 
     def _encode(self, text):
         return self.sp.encode(text)[: self.model.config["max_len"] - 1] + [EOS]
 
+    def _batches(self, segments):
+        """Length-sorted batches capped by a source-token budget, so one very long input doesn't
+        drag 60 short ones (x beam) through hundreds of extra decoding steps."""
+        order = sorted(range(len(segments)), key=lambda i: len(segments[i]))
+        batch = []
+        for i in order:
+            if batch and (len(batch) == self.batch_size or len(segments[i]) * (len(batch) + 1) > self.batch_tokens):
+                yield batch
+                batch = []
+            batch.append(i)
+        if batch:
+            yield batch
+
     def _translate_segments(self, segments):
-        order = sorted(range(len(segments)), key=lambda i: len(segments[i]))  # length-sorted batches
         out = [None] * len(segments)
-        for start in range(0, len(order), self.batch_size):
-            ids = order[start:start + self.batch_size]
+        for ids in self._batches(segments):
             seqs = [segments[i] for i in ids]
             src = torch.full((len(seqs), max(map(len, seqs))), PAD, dtype=torch.long)
             for r, s in enumerate(seqs):
