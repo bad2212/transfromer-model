@@ -12,3 +12,5 @@ work/
 work_smoke/
 Transformer_model.pdf
 PLAN.md
+report/*.html
+export/

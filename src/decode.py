@@ -163,6 +163,8 @@ class Translator:
                 hyps = greedy(self.model, src, self.a, self.b)
             for i, h in zip(ids, hyps):
                 out[i] = normalize(self.sp.decode(h))
+            if self.device.type == "mps":
+                torch.mps.empty_cache()             # release cached GPU buffers between batches
         return out
 
     def translate(self, texts):

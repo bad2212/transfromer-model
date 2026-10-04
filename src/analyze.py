@@ -100,6 +100,8 @@ def main():
     ap.add_argument("--out_dir")
     ap.add_argument("--n_aux", type=int, default=1000, help="sentences per eval-only set")
     ap.add_argument("--rare_thresh", type=int, default=5, help="training count below which a word is rare")
+    ap.add_argument("--aux_beam", type=int, help="beam for the eval-only sets (default: the dev setting); "
+                                                 "1 = greedy, ~5x cheaper in time and memory")
     args = ap.parse_args()
     cfg = load_config(args.config)
     out = args.out_dir or cfg["out_dir"]
@@ -113,10 +115,12 @@ def main():
     model = load_model(paths, device)
     sp = spm.SentencePieceProcessor(model_file=f"{out}/spm.model")
     dc = cfg["decode"]
-    tr = Translator(model, sp, device, beam=d["beam"], len_penalty=d["alpha"], max_len_a=dc["max_len_a"],
+    aux_beam = args.aux_beam or d["beam"]
+    aux_alpha = d["alpha"] if aux_beam > 1 else 0.0
+    tr = Translator(model, sp, device, beam=aux_beam, len_penalty=aux_alpha, max_len_a=dc["max_len_a"],
                     max_len_b=dc["max_len_b"], split_over_tokens=dc["split_over_tokens"])
     freqs = word_freqs(f"{cfg['work_dir']}/train.fr")
-    result = {"decode": d, "rare_thresh": args.rare_thresh}
+    result = {"decode": d, "aux_decode": {"beam": aux_beam, "alpha": aux_alpha}, "rare_thresh": args.rare_thresh}
 
     # 1. dev with bootstrap CIs
     dev_in = {r["id"]: r for r in read_jsonl("data/dev/inputs.jsonl")}
@@ -143,22 +147,28 @@ def main():
     for name, pairs in [("opus100_test", o100), ("opus_books_sample", books)]:
         pairs = [p for p in pairs if normalize(p[0]) not in banned and p[0].strip() and p[1].strip()]
         pairs = rng.sample(pairs, min(args.n_aux, len(pairs)))
+        cache = f"{dst}/{name}_beam{aux_beam}_predictions.json"   # decoding is the slow part: reuse on rerun
+        if os.path.exists(cache) and [r["src"] for r in json.load(open(cache))] == [s for s, _ in pairs]:
+            aux[name] = json.load(open(cache))
+            print(f"reused {name}: {len(pairs)}", flush=True)
+            continue
         hyps = tr.translate([s for s, _ in pairs])
         aux[name] = [{"src": s, "ref": t, "hyp": h} for (s, t), h in zip(pairs, hyps)]
+        write_json(aux[name], cache)
         print(f"decoded {name}: {len(pairs)}", flush=True)
     result["aux_sets"] = {k: official.score_slice([r["hyp"] for r in v], [r["ref"] for r in v]) for k, v in aux.items()}
 
     # 3./4. length and rare-word buckets, per domain
     nwords = lambda r: len(r["src"].split())
     result["by_length"], result["by_rare"], result["domain_stats"] = {}, {}, {}
-    rare_buckets = [(0, 0), (1e-9, 0.1), (0.1, 1.0)]
+    rare_buckets = [(0, 0), (1e-9, 0.1), (0.1 + 1e-9, 1.0)]   # (0, 0.1] and (0.1, 1]: disjoint
     for name, rows in aux.items():
         result["by_length"][name] = bucket_scores(rows, nwords, LEN_BUCKETS,
                                                   lambda lo, hi: f"{lo}-{hi}" if hi < 10 ** 6 else f"{lo}+")
         for r in rows:
             r["rare"] = rare_share(r["src"], freqs, args.rare_thresh)
         result["by_rare"][name] = bucket_scores(rows, lambda r: r["rare"], rare_buckets,
-                                                lambda lo, hi: "0" if hi == 0 else f"({lo:.2g}, {hi:.2g}]")
+                                                lambda lo, hi: "none" if hi == 0 else ("up to 10%" if hi <= 0.1 else "over 10%"))
         words = [w.lower() for r in rows for w in WORD.findall(r["src"])]
         result["domain_stats"][name] = {
             "mean_src_words": sum(map(nwords, rows)) / len(rows),
@@ -173,7 +183,7 @@ def main():
     # 6. split on/off for inputs above the threshold
     long_rows = [r for rows in aux.values() for r in rows if len(sp.encode(normalize(r["src"]))) > dc["split_over_tokens"]]
     if long_rows:
-        nosplit = Translator(model, sp, device, beam=d["beam"], len_penalty=d["alpha"], max_len_a=dc["max_len_a"],
+        nosplit = Translator(model, sp, device, beam=aux_beam, len_penalty=aux_alpha, max_len_a=dc["max_len_a"],
                              max_len_b=dc["max_len_b"], split_over_tokens=10 ** 9)
         h2 = nosplit.translate([r["src"] for r in long_rows])
         refs = [r["ref"] for r in long_rows]
