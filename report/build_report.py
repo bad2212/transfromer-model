@@ -176,6 +176,85 @@ def chart_rare(an):
     return svg_uri(fig)
 
 
+def _box(x, y, w, h, title, sub="", accent=False):
+    fill, stroke = ("#eaf2fc", "#2a78d6") if accent else ("#ffffff", "#9aa1aa")
+    t = (f"<rect x='{x}' y='{y}' width='{w}' height='{h}' rx='5' fill='{fill}' stroke='{stroke}' stroke-width='1'/>"
+         f"<text x='{x + 9}' y='{y + h / 2 + (-1 if sub else 4)}' font-size='10.5' font-weight='600' fill='#1b1d21'>{title}</text>")
+    if sub:
+        t += f"<text x='{x + 9}' y='{y + h / 2 + 11}' font-size='9' fill='#5b616b'>{sub}</text>"
+    return t
+
+
+def arch_svg():
+    """Encoder-decoder at a glance: where positions enter, how the two stacks connect, what is tied."""
+    ex, dx, w, iw = 16, 380, 324, 300            # column x, width, inner-box width
+    arrow = "marker-end='url(#ah)'"
+    s = ["<svg viewBox='0 0 720 246' xmlns='http://www.w3.org/2000/svg' font-family='-apple-system, Helvetica Neue, Arial, sans-serif'>",
+         "<defs><marker id='ah' viewBox='0 0 10 10' refX='9' refY='5' markerWidth='6' markerHeight='6' orient='auto-start-reverse'>"
+         "<path d='M0 0L10 5L0 10z' fill='#5b616b'/></marker></defs>"]
+    # inputs and shared embeddings
+    for x, label in [(ex, "French source tokens"), (dx, "English prefix (shifted right)")]:
+        s.append(f"<text x='{x + w / 2}' y='16' font-size='10.5' text-anchor='middle' fill='#1b1d21' font-weight='600'>{label}</text>")
+        s.append(f"<line x1='{x + w / 2}' y1='21' x2='{x + w / 2}' y2='31' stroke='#5b616b' {arrow}/>")
+        s.append(_box(x, 33, w, 24, "Shared embedding &#215; &#8730;512", "", False))
+        s.append(f"<line x1='{x + w / 2}' y1='57' x2='{x + w / 2}' y2='67' stroke='#5b616b' {arrow}/>")
+    # encoder stack
+    s.append(f"<rect x='{ex}' y='69' width='{w}' height='96' rx='7' fill='#f7f8fa' stroke='#1b1d21' stroke-width='1.2'/>")
+    s.append(f"<text x='{ex + 10}' y='84' font-size='10.5' font-weight='700' fill='#1b1d21'>Encoder layer &#215; 6</text>")
+    s.append(f"<text x='{ex + w - 10}' y='84' font-size='9' text-anchor='end' fill='#5b616b'>pre-LN, residual around each block</text>")
+    s.append(_box(ex + 12, 92, iw, 32, "Self-attention, 8 heads", "RoPE rotates Q and K: attention sees relative distance", True))
+    s.append(_box(ex + 12, 128, iw, 30, "Feed-forward 512 &#8594; 2048 &#8594; 512", "ReLU, dropout 0.1"))
+    s.append(f"<line x1='{ex + w / 2}' y1='165' x2='{ex + w / 2}' y2='175' stroke='#5b616b' {arrow}/>")
+    s.append(_box(ex, 177, w, 24, "Final LayerNorm &#8594; source memory"))
+    # decoder stack
+    s.append(f"<rect x='{dx}' y='69' width='{w}' height='126' rx='7' fill='#f7f8fa' stroke='#1b1d21' stroke-width='1.2'/>")
+    s.append(f"<text x='{dx + 10}' y='84' font-size='10.5' font-weight='700' fill='#1b1d21'>Decoder layer &#215; 3</text>")
+    s.append(f"<text x='{dx + w - 10}' y='84' font-size='9' text-anchor='end' fill='#5b616b'>shallow: runs once per output token</text>")
+    s.append(_box(dx + 12, 92, iw, 30, "Causal self-attention", "RoPE on Q and K; sees only earlier tokens", True))
+    s.append(_box(dx + 12, 126, iw, 30, "Cross-attention to source memory", "no positions: aligns by content"))
+    s.append(_box(dx + 12, 160, iw, 28, "Feed-forward 512 &#8594; 2048 &#8594; 512"))
+    s.append(f"<line x1='{dx + w / 2}' y1='195' x2='{dx + w / 2}' y2='205' stroke='#5b616b' {arrow}/>")
+    s.append(_box(dx, 207, w, 32, "Final LN &#8594; output layer &#8594; softmax over 16k",
+                  "output layer = embedding matrix (tied three ways)"))
+    # encoder memory feeds every decoder layer's cross-attention
+    s.append(f"<path d='M{ex + w} 189 H{ex + w + 22} V141 H{dx + 10}' fill='none' stroke='#2a78d6' stroke-width='1.4' {arrow}/>")
+    s.append(f"<text x='{ex + w + 4}' y='206' font-size='9' fill='#1f63c4'>memory</text>")
+    s.append("</svg>")
+    return "".join(s)
+
+
+def pipeline_svg():
+    """End-to-end flow: data -> model -> selection on dev -> outputs and checks."""
+    steps = [
+        [("opus-100 en-fr train", "1,000,000 pairs"), ("Normalise + filter", "923,274 kept"),
+         ("SentencePiece", "16k unigram, byte fallback"), ("Train 6/3 Transformer", "Colab T4, resumable"),
+         ("Average checkpoints", "7k, 8k, 9k")],
+        [("Tune decoding on dev", "beam x length penalty"), ("Decode test", "330 sentences"),
+         ("Official score.py", "dev BLEU / chrF by slice"), ("Analysis", "CIs, length, rare words"),
+         ("Publish", "GitHub, HF, W&B, report")],
+    ]
+    w, gap, h = 128, 20, 44
+    arrow = "marker-end='url(#ph)'"
+    s = ["<svg viewBox='0 0 720 150' xmlns='http://www.w3.org/2000/svg' font-family='-apple-system, Helvetica Neue, Arial, sans-serif'>",
+         "<defs><marker id='ph' viewBox='0 0 10 10' refX='9' refY='5' markerWidth='6' markerHeight='6' orient='auto-start-reverse'>"
+         "<path d='M0 0L10 5L0 10z' fill='#5b616b'/></marker></defs>"]
+    for r, row in enumerate(steps):
+        y = 6 + r * 92
+        for i, (t, sub) in enumerate(row):
+            x = i * (w + gap)
+            accent = (r, i) in [(0, 3), (1, 0)]
+            fill, stroke = ("#eaf2fc", "#2a78d6") if accent else ("#ffffff", "#9aa1aa")
+            s.append(f"<rect x='{x + 1}' y='{y}' width='{w - 2}' height='{h}' rx='6' fill='{fill}' stroke='{stroke}'/>")
+            s.append(f"<text x='{x + w / 2}' y='{y + 19}' font-size='10' font-weight='600' text-anchor='middle' fill='#1b1d21'>{t}</text>")
+            s.append(f"<text x='{x + w / 2}' y='{y + 33}' font-size='8.6' text-anchor='middle' fill='#5b616b'>{sub}</text>")
+            if i < len(row) - 1:
+                s.append(f"<line x1='{x + w}' y1='{y + h / 2}' x2='{x + w + gap - 1}' y2='{y + h / 2}' stroke='#5b616b' {arrow}/>")
+    last = 4 * (w + gap) + w / 2
+    s.append(f"<path d='M{last} 50 V74 H{w / 2} V96' fill='none' stroke='#5b616b' {arrow}/>")
+    s.append("</svg>")
+    return "".join(s)
+
+
 def head(title, sub, eyebrow):
     chips = "".join(f"<a class=chip href='{u}'><b>{esc(k)}</b>{esc(v)}</a>" for k, v, u in LINKS)
     return (f"<div class=title><div class=eyebrow>{esc(eyebrow)}</div><h1>{title}</h1>"
@@ -240,6 +319,9 @@ def build(run):
 </ol></div>
 
 {h2(1, "Architecture decisions")}
+<figure style='margin:0 0 4px'>{arch_svg()}
+<div class=fs style='margin-top:2px'>39.7M parameters. Positions enter only through RoPE inside the two self-attentions; the encoder's output
+(memory) feeds the cross-attention of every decoder layer; one 16k &times; 512 matrix serves as both embeddings and the output layer.</div></figure>
 <table><tr><th style='width:23%'>Choice</th><th style='width:42%'>Why</th><th>Rejected alternative</th></tr>
 <tr><td class=k>Encoder-decoder [1]</td><td>Reads the source bidirectionally; cross-attention aligns target to source words</td><td>Decoder-only: causal view of the source, sequences 2&times; longer</td></tr>
 <tr><td class=k>6 enc / 3 dec, d 512 [2]</td><td><b>Measured</b> on the T4: 6/6 ran at 11.5k target tok/s, 6/3 at 13.6k, so ~20% more updates in budget</td><td>6/6 base: slightly better per step, 15% slower</td></tr>
@@ -325,7 +407,20 @@ A planned kill-and-resume test caught a bug (RNG state moved to GPU) before the 
 <tr><td class=k>Beam-search and splitter edge cases</td><td>Unit tests: greedy = beam(1), overfit-and-recover, abbreviation-aware splitting</td></tr>
 </table>
 
-{h2(7, "Next steps with more time or compute")}
+{h2(7, "How the results were validated")}
+<table><tr><th style='width:26%'>Check</th><th>Evidence</th></tr>
+<tr><td class=k>Model correctness</td><td>5 unit tests: causal mask, padding invariance (RoPE and sinusoidal), a tiny model memorises 8 pairs and
+greedy, beam(1) and beam(4) all recover them, normalisation, sentence splitting</td></tr>
+<tr><td class=k>Metric fidelity</td><td>Scoring imports the official <code>score.py</code>; identical OVERALL (39.94) to running it directly</td></tr>
+<tr><td class=k>No leakage</td><td>Dev/test sources removed from training; opus_books used only after every choice was fixed; all tuning on dev</td></tr>
+<tr><td class=k>Reproducibility</td><td>Identical filter counts on two machines; seeded batch order; one command reproduces the run</td></tr>
+<tr><td class=k>Uncertainty</td><td>Bootstrap CIs on every dev slice; the gap re-measured on 1,000 sentences per domain</td></tr>
+<tr><td class=k>Claims vs data</td><td>Each failure claim counted on 2,000 outputs before writing; two over-strong draft claims were corrected</td></tr>
+<tr><td class=k>Deliverables</td><td>Submission matches all 330 ids; Hugging Face weights match by SHA-256 and load with 3 dependencies</td></tr>
+</table>
+<p class=muted style='font-size:7.2pt'>All 19 checks, with results, are in the appendix.</p>
+
+{h2(8, "Next steps with more time or compute")}
 <ul><li><b>Train to convergence</b> (dev still rising at 9k steps) with a cosine tail, and several seeds for variance.</li>
 <li><b>Close the domain gap:</b> back-translate monolingual English literature (not opus_books) [12], domain tags, a copy mechanism for names.</li>
 <li><b>Run the prepared ablations</b> (RoPE vs sinusoidal, 16k vs 32k vocab) and stronger data filtering [13].</li>
@@ -412,6 +507,10 @@ def build_appendix(run, validations):
 {head("Appendix: validations and work beyond the brief",
       "Companion to the 3-page report. Every number comes from files in the repo or the Hugging Face model repo (<code>eval/</code>, <code>analysis/</code>), regenerated by <code>python report/build_report.py</code>.",
       "Appendix")}
+
+<figure style='margin:2px 0 4px'><div class=ft>End-to-end pipeline</div>
+<div class=fs>Everything right of training uses dev only for choices; the analysis runs after every choice is fixed. Blue: the two steps that set the model and its decoding.</div>
+{pipeline_svg()}</figure>
 
 {h2("A", "Work beyond the brief")}
 <table><tr><th style='width:30%'>Item</th><th>What it adds</th></tr>

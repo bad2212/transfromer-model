@@ -1,8 +1,9 @@
 # French → English Transformer, trained from scratch
 
 Encoder-decoder Transformer (pre-LN, RoPE, tied embeddings, joint SentencePiece) trained from
-scratch on a filtered subset of `Helsinki-NLP/opus-100` (en-fr), evaluated on in-domain, long, and
-unseen-domain (`opus_books`, never trained on) slices.
+scratch on filtered `Helsinki-NLP/opus-100` (en-fr), with per-slice evaluation and a generalization
+analysis. Design choices, results and failure modes are explained in [`report/report.pdf`](report/report.pdf);
+every validation is listed in [`report/appendix.pdf`](report/appendix.pdf).
 
 | | Link |
 |---|---|
@@ -14,8 +15,8 @@ unseen-domain (`opus_books`, never trained on) slices.
 
 ## Results (provided dev set, official `score.py`)
 
-6 encoder / 3 decoder layers, 39.7M parameters, 3.6 h on one T4 (9,000 updates, ~8.3 epochs; stopped by the
-free-Colab GPU quota), average of checkpoints 7k-9k, beam 5, length penalty 1.8.
+6 encoder / 3 decoder layers, 39.7M parameters, trained on a single T4. Final weights average the last three
+checkpoints; decoding uses beam 5 with length penalty 1.8 (both chosen on dev).
 
 | Slice | n | BLEU | chrF |
 |---|---|---|---|
@@ -24,8 +25,8 @@ free-Colab GPU quota), average of checkpoints 7k-9k, beam 5, length penalty 1.8.
 | unseen_domain | 60 | 21.89 | 43.41 |
 | **all** | 150 | **30.23** | **47.91** |
 
-**OVERALL = 39.94** (0.4·BLEU + 0.4·chrF + 0.2·chrF on unseen_domain). Length is not the failure mode at these
-lengths; domain is (see the report).
+**OVERALL = 39.94** (0.4·BLEU + 0.4·chrF + 0.2·chrF on the unseen_domain slice). Confidence intervals, the
+analysis behind each slice and the failure modes are in the report.
 
 ## Reproduce (one command, seeded)
 
@@ -56,6 +57,10 @@ Local smoke test (CPU/Apple-GPU, ~10 min, not for results): `bash scripts/reprod
 | `src/decode.py` | greedy, beam search with GNMT length penalty, long-input splitting, output normalisation |
 | `src/predict.py` | checkpoint averaging, dev sweep, dev/test predictions |
 | `src/metrics.py` | dev scoring via the official `score.py` functions |
+| `src/analyze.py` | bootstrap CIs, score by length and rare-word share, reference loss, failure examples |
+| `src/hub.py`, `src/inference.py` | export to the Hugging Face Hub (weights, tokenizer, code, model card) and loading |
+| `report/` | `report.pdf`, `appendix.pdf` and `build_report.py`, which regenerates both from the result files |
+| `scripts/wandb_report.py` | builds the W&B report |
 | `tests/test_sanity.py` | causality, padding invariance, overfit-and-decode, normalisation, splitting |
 | `score.py` | official scorer (unchanged) |
 | `data/dev`, `data/test` | frozen eval sets (provided) |
@@ -63,6 +68,5 @@ Local smoke test (CPU/Apple-GPU, ~10 min, not for results): `bash scripts/reprod
 ## Data
 
 - Train: `Helsinki-NLP/opus-100`, config `en-fr`, `train` split, fr → en. Validation split for loss.
-- Unseen-domain eval: `Helsinki-NLP/opus_books` (`en-fr`). **Not used for training or model selection.**
 - Submission format: `{"<id>": "<english translation>", ...}`; score with
   `python3 score.py --gold data/dev/labels.jsonl --pred <file>.json`.
