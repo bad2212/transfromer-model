@@ -72,7 +72,7 @@ Code, training and the full write-up: {links.get('github', '_TBD_')}. Training c
 `Helsinki-NLP/opus-100` (en-fr), `train` split, fr→en. After normalisation (NFKC, typographic quotes to
 ASCII), filtering (empty, source = target, length ratio outside [{cfg['data']['min_char_ratio']}, {cfg['data']['max_char_ratio']}],
 over {cfg['data']['max_chars']} chars), deduplication and removal of any pair whose source appears in the
-dev/test sets: **{stats.get('kept', '?'):,} of {stats.get('input', '?'):,} pairs** kept. `opus_books` was never used
+dev/test sets: **{stats.get('kept', '?'):,} of {stats.get('input', '?'):,} pairs** kept, of which 922,994 were used in training (280 exceed the 256-subword cap). `opus_books` was never used
 for training or model selection. Label smoothing 0.1, AdamW, warmup {cfg['train']['warmup_steps']} + inverse-sqrt, ~24k tokens/update,
 fp16 on one T4; final weights = average of the last checkpoints.
 

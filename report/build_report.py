@@ -338,8 +338,9 @@ def build(run):
 <p><b>Data.</b> opus-100 en-fr <i>train</i> only, no subsampling. Unicode and quote normalisation (books sources use &rsquo;, their
 references use '), then filtering kept <b>{stats['kept']:,} of {stats['input']:,}</b> pairs: {stats['duplicate']:,} duplicates,
 {stats['bad_length_ratio']:,} bad length ratios, {stats['src_equals_tgt']:,} untranslated copies, {stats['empty_or_no_letters']:,} empty,
-{stats['too_long_chars']:,} over-long, {stats['overlaps_dev_or_test']} dev/test overlaps. opus_books was never used for training,
-the tokenizer or any tuning.</p>
+{stats['too_long_chars']:,} over-long, {stats['overlaps_dev_or_test']} dev/test overlaps; <b>922,994</b> were used in training
+(280 exceed the 256-subword cap). opus_books was never used for training or tuning. Dev slices come from opus-100 validation
+(<i>seen</i>), opus-100 test (<i>long</i>) and opus_books (<i>unseen</i>); the logged validation loss includes the 60 <i>seen</i> sentences but drove no choice.</p>
 <p><b>Training.</b> Label smoothing 0.1, AdamW (0.9, 0.98), 4k warmup + inverse-sqrt, ~24k tokens per update, fp16, seed 42.
 Stopped at step 9,000 (~8.3 epochs, 3.6 of a planned 5.5 h) when the free-Colab GPU quota ran out, so the model is
 <b>under-trained</b>. Final weights average checkpoints 7k&ndash;9k [11] (greedy 38.49 vs 38.14 for 9k alone).</p>
@@ -416,9 +417,8 @@ greedy, beam(1) and beam(4) all recover them, normalisation, sentence splitting<
 <tr><td class=k>Reproducibility</td><td>Identical filter counts on two machines; seeded batch order; one command reproduces the run</td></tr>
 <tr><td class=k>Uncertainty</td><td>Bootstrap CIs on every dev slice; the gap re-measured on 1,000 sentences per domain</td></tr>
 <tr><td class=k>Claims vs data</td><td>Each failure claim counted on 2,000 outputs before writing; two over-strong draft claims were corrected</td></tr>
-<tr><td class=k>Deliverables</td><td>Submission matches all 330 ids; Hugging Face weights match by SHA-256 and load with 3 dependencies</td></tr>
+<tr><td class=k>Deliverables</td><td>Submission matches all 330 ids; Hugging Face weights match by SHA-256 and load with 3 dependencies. All 21 checks are in the appendix</td></tr>
 </table>
-<p class=muted style='font-size:7.2pt'>All 19 checks, with results, are in the appendix.</p>
 
 {h2(8, "Next steps with more time or compute")}
 <ul><li><b>Train to convergence</b> (dev still rising at 9k steps) with a cosine tail, and several seeds for variance.</li>
